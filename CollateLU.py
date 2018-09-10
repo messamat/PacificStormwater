@@ -16,15 +16,27 @@ resdir = os.path.join(rootdir,'results')
 CAdir = os.path.join(datadir,'CA_LULC')
 ORzoning = os.path.join(datadir,'Oregon_Zoning_2017/Oregon_Zoning_2017.shp')
 LAzoning = os.path.join(CAdir, 'LosAngeles/General_Plan_Land_Use__Los_Angeles/Los_Angeles_PL_SCAG.shp')
-Orangezoning = os.path.join(CAdir, 'Orange\Zoning\Zoning_2018_08_01.shp')
 SanDiegozoning = os.path.join(CAdir, 'SanDiego\LANDUSE_CURRENT\LANDUSE_CURRENT.shp')
 SanBerzoning = os.path.join(CAdir, 'SanBernardino\SBCo_Parcel_Polygons\SBCo_Parcel_Polygons.shp')
+ContraCostazoning = os.path.join(CAdir, 'ContraCosta/PLA_DCD_Zoning/PLA_DCD_Zoning.shp')
+Kernzoning = os.path.join(CAdir, 'Kern/Zoning/Zoning.shp')
+Montereyzoning = os.path.join(CAdir, 'Monterey/Zoning/Zoning.shp')
+SantaCruzzoning = os.path.join(CAdir, 'SantaCruz/Zoning/Zoning.shp')
+SCAGzoning = os.path.join(CAdir, 'SCAG/landuse_poly_SCAG_2012.shp')
 
 arcpy.env.workspace = resdir
 
 #Output variables
 CDWR_merge = os.path.join(resdir, 'CDWR_merge.shp')
 CDWR_merge_noZ = os.path.join(resdir, 'CDWR_merge_noZ.shp')
+LAreclass = LAzoning[:-4]+'_reclass.shp'
+SanDiegoreclass = SanDiegozoning[:-4]+'_reclass.shp'
+SanBerreclass = SanBerzoning[:-4]+'_reclass.shp'
+ContraCostareclass = ContraCostazoning[:-4]+'_reclass.shp'
+Kernreclass = Kernzoning[:-4]+'_reclass.shp'
+Montereyreclass = Montereyzoning[:-4]+'_reclass.shp'
+SantaCruzreclass = SantaCruzzoning[:-4]+'_reclass.shp'
+SCAGreclass = SCAGzoning[:-4]+'_reclass.shp'
 
 #Define functions
 def listunique(feature, field) :
@@ -35,10 +47,10 @@ def listunique(feature, field) :
         wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
         wr.writerow(ulist)
 
-# ----------------------------------- ANALYSIS ------------------------------------------------------------------------#
+# ----------------------------------- FORMAT INDIVIDUAL DATASETS -------------------------------------------------------
 
 #Reclassify Oregon zoning dataset
-listunique(ORzoning, 'orZDesc')
+listunique(ORzoning, 'orZDesc') #Then manually format and classify into Agriculture, Residential, Commercial, Industrial, Miscellaneous in Excel
 arcpy.MakeFeatureLayer_management(ORzoning, 'ORzoning_lyr')
 arcpy.AddJoin_management('ORzoning_lyr', 'orZDesc',
                          os.path.join(datadir,'Oregon_Zoning_2017/ORzoningreclass_edit.csv'), 'orZDesc')
@@ -64,28 +76,65 @@ listunique(LAzoning, 'SCAG_GP_CO')
 arcpy.MakeFeatureLayer_management(LAzoning, 'LAzoninglyr')
 arcpy.AddJoin_management('LAzoninglyr','SCAG_GP_CO',
                          os.path.join(CAdir,'LosAngeles/General_Plan_Land_Use__Los_Angeles/Los_Angeles_PL_SCAGreclass_edit.csv'),'SCAG_GP_CO')
-arcpy.CopyFeatures_management('LAzoninglyr', 'LAzoning_reclass.shp')
+arcpy.CopyFeatures_management('LAzoninglyr', LAreclass)
+arcpy.AddField_management(LAreclass, 'SURVEYYEAR','LONG',10)
+arcpy.CalculateField_management(LAreclass, 'SURVEYYEAR', 2012, expression_type='PYTHON')
 
 #San Diego
 listunique(SanDiegozoning, 'Landuse')
 arcpy.MakeFeatureLayer_management(SanDiegozoning, 'SanDiegozoninglyr')
-arcpy.AddJoin_management('SanDiegozoninglyr','Landuse',os.path.join(CAdir,'LANDUSE_CURRENTreclass_edit.csv'),'Landuse')
-arcpy.CopyFeatures_management('SanDiegozoninglyr', 'SanDiegozoning_reclass.shp')
+arcpy.AddJoin_management('SanDiegozoninglyr','Landuse',SanDiegozoning[:-4]+'reclass_edit.csv','Landuse')
+arcpy.CopyFeatures_management('SanDiegozoninglyr', SanDiegoreclass)
+arcpy.AddField_management(SanDiegoreclass, 'SURVEYYEAR','LONG',10)
+arcpy.CalculateField_management(SanDiegoreclass, 'SURVEYYEAR', 2017, expression_type='PYTHON')
 
 #San Bernardino
 listunique(SanBerzoning, 'AssessClas')
 arcpy.MakeFeatureLayer_management(SanBerzoning, 'SanBerzoninglyr')
-arcpy.AddJoin_management('SanBerzoninglyr','AssessClas',os.path.join(CAdir,'SBCo_Parcel_Polygonsreclass_edit.csv'),'AssessClas')
-arcpy.CopyFeatures_management('SanBerzoninglyr', 'SanBerzoning_reclass.shp')
+arcpy.AddJoin_management('SanBerzoninglyr','AssessClas',SanBerzoning[:-4]+'reclass_edit.csv','AssessClas')
+arcpy.CopyFeatures_management('SanBerzoninglyr', SanBerreclass)
+arcpy.AddField_management(SanDiegoreclass, 'SURVEYYEAR','LONG',10)
+arcpy.CalculateField_management(SanDiegoreclass, 'SURVEYYEAR', 2017, expression_type='PYTHON')
+
+#Contra Costa
+listunique(ContraCostazoning, 'Zoning_Tex')
+arcpy.MakeFeatureLayer_management(ContraCostazoning, 'ContraCostazoninglyr')
+arcpy.AddJoin_management('ContraCostazoninglyr','Zoning_Tex', ContraCostazoning[:-4]+'reclass_edit.csv','Zoning_Tex')
+arcpy.CopyFeatures_management('ContraCostazoninglyr', ContraCostareclass)
+arcpy.AddField_management(ContraCostareclass, 'SURVEYYEAR','LONG',10)
+arcpy.CalculateField_management(ContraCostareclass, 'SURVEYYEAR', 2005, expression_type='PYTHON')
+
+#Kern
+listunique(Kernzoning, 'Comb_Zn')
+arcpy.MakeFeatureLayer_management(Kernzoning, 'Kernzoninglyr')
+arcpy.AddJoin_management('Kernzoninglyr','Comb_Zn', Kernzoning[:-4]+'reclass_edit.csv','Comb_Zn')
+arcpy.CopyFeatures_management('Kernzoninglyr', Kernreclass)
+arcpy.AddField_management(Kernreclass, 'SURVEYYEAR','LONG',10)
+arcpy.CalculateField_management(Kernreclass, 'SURVEYYEAR', 2005, expression_type='PYTHON')
+#Still missing Ridgecrest and California City zoning data
+
+#Monterey
+listunique(Montereyzoning, 'ZONE_CATEG')
+arcpy.MakeFeatureLayer_management(Montereyzoning, 'Montereyzoninglyr')
+arcpy.AddJoin_management('Montereyzoninglyr','ZONE_CATEG', Montereyzoning[:-4]+'reclass_edit.csv','ZONE_CATEG')
+arcpy.CopyFeatures_management('Montereyzoninglyr', Montereyreclass)
+arcpy.AddField_management(Montereyreclass, 'SURVEYYEAR','LONG',10)
+arcpy.CalculateField_management(Montereyreclass, 'SURVEYYEAR', 2018, expression_type='PYTHON')
+
+#Santa Cruz
+listunique(SantaCruzzoning, 'GENERIC')
+arcpy.MakeFeatureLayer_management(SantaCruzzoning, 'SantaCruzzoninglyr')
+arcpy.AddJoin_management('SantaCruzzoninglyr','GENERIC', SantaCruzzoning[:-4]+'reclass_edit.csv','GENERIC')
+arcpy.CopyFeatures_management('SantaCruzzoninglyr', SantaCruzreclass)
+arcpy.AddField_management(SantaCruzreclass, 'SURVEYYEAR','LONG',10)
+arcpy.CalculateField_management(SantaCruzreclass, 'SURVEYYEAR', 2017, expression_type='PYTHON')
+
+#SCAG
+#Add 'SURVEYYEAR'
+
+# ----------------------------------- MERGE DATASETS -------------------------------------------------------
 
 
-#######To do:
-#Add other counties
-#Add Kern zoning
-#For Kern: still missing Ridgecrest and California City zoning data
-#Follow up on SCAG data (for Orange and Imperial counties)
+
 #Still missing: Tehama (missing in database, should be a 2012 layer),
-
 #Normal to be missing (don't drain to west coast): Nevada, Sierra, Mono, Inyo, Alpine
-
-#Add common field that includes year
