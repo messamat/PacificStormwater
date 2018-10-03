@@ -1,10 +1,11 @@
 import arcpy
+from arcpy.sa import *
 import os
 import collections
 import csv
 import re
 
-#arcpy.CheckOutExtension("Spatial")
+arcpy.CheckOutExtension("Spatial")
 arcpy.env.overwriteOutput = True
 arcpy.env.qualifiedFieldNames = False
 
@@ -30,8 +31,12 @@ WAzoning = 'C:/Mathis/ICSL/flood_vulnerability/results/flood_risk.gdb/parcel_o5c
 arcpy.env.workspace = resdir
 
 #Output variables
-WAreclass = os.path.join(resdir, 'WAzoning_reclass.shp')
-ORreclass = ORzoning[:-4]+'_reclass.shp'
+LU_gdb = os.path.join(resdir, 'LU.gdb')
+if not arcpy.Exists(LU_gdb):
+    arcpy.CreateFileGDB_management(resdir, 'LU.gdb')
+
+WAreclass = os.path.join(LU_gdb, 'WAzoning_reclass')
+ORreclass = os.path.join(LU_gdb,'ORzoning_reclass')
 CDWR_merge = os.path.join(resdir, 'CDWR_merge.shp')
 CDWR_merge_noZ = os.path.join(resdir, 'CDWR_merge_noZ.shp')
 LAreclass = LAzoning[:-4]+'_reclass'
@@ -43,14 +48,13 @@ Montereyreclass = Montereyzoning[:-4]+'_reclass.shp'
 SantaCruzreclass = SantaCruzzoning[:-4]+'_reclass.shp'
 SCAGreclass = SCAGzoning[:-4]+'_reclass'
 
-LU_gdb = os.path.join(resdir, 'LU.gdb')
-if not arcpy.Exists(LU_gdb):
-    arcpy.CreateFileGDB_management(resdir, 'LU.gdb')
 CALUall = os.path.join(LU_gdb, 'CALU_all')
 CALUurb = os.path.join(LU_gdb,'CALU_urban')
 CALUras = os.path.join(LU_gdb,'CALU_urbanras')
 WALUras = os.path.join(LU_gdb, 'WALU_urbanras')
 ORLUras = os.path.join(LU_gdb, 'ORLU_urbanras')
+WCLU = os.path.join(LU_gdb, 'WestCoastLU')
+NLCD_reclass = os.path.join(LU_gdb, 'NLCD_reclass')
 
 #Define functions
 def listunique(feature, field) :
@@ -66,18 +70,20 @@ crs= arcpy.Describe(NLCD).SpatialReference
 # ----------------------------------- FORMAT INDIVIDUAL DATASETS -------------------------------------------------------
 #Reclassify Washington parcel dataset
 listunique(WAzoning, 'StateLandUseCD') #Then manually format and classify into Agriculture, Residential, Commercial, Industrial, Miscellaneous in Excel
-arcpy.MakeFeatureLayer_management(WAzoning, 'WAzoning_lyr')
+arcpy.Project_management(WAzoning, os.path.join(LU_gdb,'WAzoning_proj'), crs)
+arcpy.MakeFeatureLayer_management(os.path.join(LU_gdb,'WAzoning_proj'), 'WAzoning_lyr')
 arcpy.AddJoin_management('WAzoning_lyr', 'StateLandUseCD',os.path.join(resdir,'WAzoningreclass_edit.csv'),
                          'StateLandUseCD', 'KEEP_COMMON')
 arcpy.CopyFeatures_management('WAzoning_lyr', WAreclass)
 
+
 #Reclassify Oregon zoning dataset
 listunique(ORzoning, 'orZDesc') #Then manually format and classify into Agriculture, Residential, Commercial, Industrial, Miscellaneous in Excel
-arcpy.MakeFeatureLayer_management(ORzoning, 'ORzoning_lyr')
+arcpy.Project_management(ORzoning, os.path.join(LU_gdb,'ORzoning_proj'), crs)
+arcpy.MakeFeatureLayer_management(os.path.join(LU_gdb,'ORzoning_proj'), 'ORzoning_lyr')
 arcpy.AddJoin_management('ORzoning_lyr', 'orZDesc',os.path.join(datadir,'Oregon_Zoning_2017/ORzoningreclass_edit.csv'),
                          'orZDesc', 'KEEP_COMMON')
 arcpy.CopyFeatures_management('ORzoning_lyr', ORreclass)
-
 
 #Merge all California Department of Water Resources Land Use datasets
 regx_dir = '.*\d.*'
@@ -210,7 +216,7 @@ arcpy.Delete_management('CALU_alllyr')
 arcpy.Delete_management(CALUall)
 
 #Rasterize to same extent and resolution as NLCD keeping maximum LU intensity when overlap
-arcpy.env.extent = NLCD
+arcpy.env.snapRaster = NLCD
 arcpy.PolygonToRaster_conversion(CALUurb, 'Luintensity', CALUras, cell_assignment='MAXIMUM_AREA',
                                  priority_field='Luintensity', cellsize=NLCD)
 #(assume that most recent LU is always more intense)
@@ -227,6 +233,12 @@ arcpy.PolygonToRaster_conversion('ORreclasslyr', os.path.split(LUint_reclass)[1]
                                  priority_field=os.path.split(LUint_reclass)[1]+'.Luintensity', cellsize=NLCD)
 
 #Merge all rasters
+arcpy.MosaicToNewRaster_management([CALUras, ORLUras, WALUras], LU_gdb, os.path.split(WCLU)[1],
+                                   number_of_bands = 1,mosaic_method='MAXIMUM')
+
 #Create residential, commercial, industrial dataset
-
-
+NLCD_reclass = os.path.join(LU_gdb, 'NLCD_reclass')
+outCon = Con((Raster(NLCD)>=21) & (Raster(NLCD)<=23), 97,
+             Con((Raster(NLCD)==24) & (Raster(WCLU)<3), 98,
+             Con((Raster(NLCD) == 24) & (Raster(WCLU) == 3), 99, Raster(NLCD))))
+outCon.save(NLCD_reclass)
