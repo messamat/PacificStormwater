@@ -238,7 +238,11 @@ arcpy.MosaicToNewRaster_management([CALUras, ORLUras, WALUras], LU_gdb, os.path.
 
 #Create residential, commercial, industrial dataset
 NLCD_reclass = os.path.join(LU_gdb, 'NLCD_reclass')
-outCon = Con((Raster(NLCD)>=21) & (Raster(NLCD)<=23), 97,
-             Con((Raster(NLCD)==24) & (Raster(WCLU)<3), 98,
-             Con((Raster(NLCD) == 24) & (Raster(WCLU) == 3), 99, Raster(NLCD))))
-outCon.save(NLCD_reclass)
+outCon1 = Con((Raster(NLCD)  >=  21)  & (Raster(NLCD)  <=  23), 97,
+    Con((Raster(NLCD)== 24), 98, Raster(NLCD)))
+outCon1.save(NLCD_reclass+'_inter')
+
+outCon2 = Con(IsNull(Raster(WCLU)), Raster(NLCD_reclass+'_inter'),
+              Con((Raster(NLCD_reclass+'_inter') == 98) & (Raster(WCLU) == 3), 99, Raster(NLCD_reclass+'_inter')))
+outCon2.save(NLCD_reclass)
+arcpy.Delete_management(NLCD_reclass)
