@@ -1,3 +1,8 @@
+#Author: Mathis Messager
+
+#Purpose: reclassify NLCD land cover data of the Pacific-draining regions of Oregon, Washington, and Oregon to create
+#         three urban land use classes - residential, commercial, and industrial.
+
 import arcpy
 from arcpy.sa import *
 import os
@@ -68,7 +73,7 @@ def listunique(feature, field) :
 crs= arcpy.Describe(NLCD).SpatialReference
 
 # ----------------------------------- FORMAT INDIVIDUAL DATASETS -------------------------------------------------------
-#Reclassify Washington parcel dataset
+#Reclassify Washington parcel dataset to subset and aggregate land use classes into residential, commercial, and industrial
 listunique(WAzoning, 'StateLandUseCD') #Then manually format and classify into Agriculture, Residential, Commercial, Industrial, Miscellaneous in Excel
 arcpy.Project_management(WAzoning, os.path.join(LU_gdb,'WAzoning_proj'), crs)
 arcpy.MakeFeatureLayer_management(os.path.join(LU_gdb,'WAzoning_proj'), 'WAzoning_lyr')
@@ -77,7 +82,7 @@ arcpy.AddJoin_management('WAzoning_lyr', 'StateLandUseCD',os.path.join(resdir,'W
 arcpy.CopyFeatures_management('WAzoning_lyr', WAreclass)
 
 
-#Reclassify Oregon zoning dataset
+#Reclassify Oregon zoning dataset to subset and aggregate land use classes into residential, commercial, and industrial
 listunique(ORzoning, 'orZDesc') #Then manually format and classify into Agriculture, Residential, Commercial, Industrial, Miscellaneous in Excel
 arcpy.Project_management(ORzoning, os.path.join(LU_gdb,'ORzoning_proj'), crs)
 arcpy.MakeFeatureLayer_management(os.path.join(LU_gdb,'ORzoning_proj'), 'ORzoning_lyr')
@@ -100,7 +105,7 @@ arcpy.MakeFeatureLayer_management(CDWR_merge, 'CDWR_mergelyr', where_clause="NOT
 listunique(CDWR_merge_noZ, 'CLASS1')
 arcpy.AddJoin_management('CDWR_mergelyr','CLASS1',os.path.join(CAdir,'CDWR_reclass_edit.csv'),'CLASS1', 'KEEP_COMMON')
 arcpy.CopyFeatures_management('CDWR_mergelyr', CDWR_merge_noZ)
-#arcpy.MakeFeatureLayer_management(CDWR_merge_noZ, 'CDWR_mergelyr', where_clause="FID = 228570")
+#arcpy.MakeFeatureLayer_management(CDWR_merge_noZ, 'CDWR_mergelyr', where_clause="FID = 228570") #Delete large blank polygon over Mendocino NE
 #arcpy.DeleteFeatures_management('CDWR_mergelyr')
 
 #Los Angeles
@@ -210,11 +215,11 @@ if mergeready == True:
 arcpy.MakeFeatureLayer_management(CALUall, 'CALU_alllyr')
 arcpy.AddJoin_management('CALU_alllyr', 'StormClass', LUint_reclass, 'StormClass', 'KEEP_COMMON')
 arcpy.CopyFeatures_management('CALU_alllyr', CALUurb)
-########################## TO TEST/RUN ############################
 #Delete full merged dataset
 arcpy.Delete_management('CALU_alllyr')
 arcpy.Delete_management(CALUall)
 
+# ----------------------------------- RASTERIZE AND MERGE ALL STATE DATASETS -------------------------------------------
 #Rasterize to same extent and resolution as NLCD keeping maximum LU intensity when overlap
 arcpy.env.snapRaster = NLCD
 arcpy.PolygonToRaster_conversion(CALUurb, 'Luintensity', CALUras, cell_assignment='MAXIMUM_AREA',
