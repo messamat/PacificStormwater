@@ -76,26 +76,16 @@ arcpy.PolygonToRaster_conversion(WCroadbuff, 'PIX', WCroadras, cell_assignment= 
 roadrasag = arcpy.sa.Aggregate(WCroadras, 5, aggregation_type= 'SUM', extent_handling='EXPAND', ignore_nodata='DATA')
 roadrasag.save(WCroadrasag)
 
-OutCon1 = Con(IsNull(Raster(WCroadrasag)), NLCD_reclass,
-              Con((Raster(NLCD)==21) & ((Raster(WCroadrasag)/25)>0.15), 96,
-                  Con((Raster(NLCD)==22) & ((Raster(WCroadrasag)/25)>0.20), 96,
-                      Con((Raster(NLCD)==23) & ((Raster(WCroadrasag)/25)>0.25), 96,
-                        Con((Raster(NLCD)==23) & ((Raster(WCroadrasag)/25)>0.40), 96, NLCD_reclass
+OutCon1 = Con(IsNull(Raster(WCroadrasag)), Raster(NLCD_reclass),
+              Con((Raster(NLCD)==21) & ((Float(Raster(WCroadrasag))/25.0)>0.15), 96,
+                  Con((Raster(NLCD)==22) & ((Float(Raster(WCroadrasag)/25.0))>0.20), 96,
+                      Con((Raster(NLCD)==23) & ((Float(Raster(WCroadrasag)/25.0))>0.25), 96,
+                        Con((Raster(NLCD)==24) & ((Float(Raster(WCroadrasag)/25.0))>0.40), 96, Raster(NLCD_reclass)
                             )))))
 OutCon1.save("NLCD_reclass_final")
 
-# Out = Con(IsNull("WestCoastroadsras"), "NLCD_reclass_final",
-#           Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==21) & ((Float("WestCoastroadsras")/25)>=0.20), 96,
-#               Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==22) & ((Float("WestCoastroadsras")/25)>=0.25), 96,
-#                   Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==23) & ((Float("WestCoastroadsras")/25)>=0.40), 96,
-#                       Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==23) & ((Float("WestCoastroadsras")/25)>=0.50), 96,
-#                       "NLCD_reclass_final")))))
 
-#Subset raster to just urban pixels
-arcpy.env.extent = WCroadbuff
-urblu = Con(Raster(NLCD_reclass)>95, 1)
-urblu.save(NLCD_reclass_sub)
-
+#-------------------------------------------- EXTRA STUFF --------------------------------------------------------------
 #Create fishnet to intersect with roads - too bulky, leads to 280 million polygons just for Washington State and took 36h to generate
 # orig = str(arcpy.GetRasterProperties_management(NLCD_reclass_sub, 'LEFT').getOutput(0)) + ' ' + \
 #        str(arcpy.GetRasterProperties_management(NLCD_reclass_sub, 'BOTTOM').getOutput(0))
