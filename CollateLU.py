@@ -1,12 +1,14 @@
 #Author: Mathis Messager
+#September 2018
 
 #Purpose: reclassify NLCD land cover data of the Pacific-draining regions of Oregon, Washington, and Oregon to create
 #         three urban land use classes - residential, commercial, and industrial.
 
+#Next script: RoadLU.py
+
 import arcpy
 from arcpy.sa import *
 import os
-import collections
 import csv
 import re
 
@@ -242,12 +244,13 @@ arcpy.MosaicToNewRaster_management([CALUras, ORLUras, WALUras], LU_gdb, os.path.
                                    number_of_bands = 1,mosaic_method='MAXIMUM')
 
 #Create residential, commercial, industrial dataset
+#Do not include NLCD class 21 as urban as after inspection, almost only includes city parks and golf courses.
 NLCD_reclass = os.path.join(LU_gdb, 'NLCD_reclass')
-outCon1 = Con((Raster(NLCD)  >=  21)  & (Raster(NLCD)  <=  23), 97,
+outCon1 = Con((Raster(NLCD)  >=  22)  & (Raster(NLCD)  <=  23), 97,
     Con((Raster(NLCD)== 24), 98, Raster(NLCD)))
 outCon1.save(NLCD_reclass+'_inter')
 
 outCon2 = Con(IsNull(Raster(WCLU)), Raster(NLCD_reclass+'_inter'),
               Con((Raster(NLCD_reclass+'_inter') == 98) & (Raster(WCLU) == 3), 99, Raster(NLCD_reclass+'_inter')))
 outCon2.save(NLCD_reclass)
-arcpy.Delete_management(NLCD_reclass)
+arcpy.Delete_management(NLCD_reclass+'_inter')
