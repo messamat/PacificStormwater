@@ -1,23 +1,29 @@
+#Author: Mathis Messager
+#September 2018
+
+#Purpose: reclassify NLCD land cover data of the Pacific-draining regions of Oregon, Washington, and Oregon to create
+#         a road class using Open Street Map road layers.
+
+#Previous script: CollateLU.py
+
 import arcpy
-from arcpy import env
 from arcpy.sa import *
 import os
-import csv
-import collections
 
 #arcpy.CheckOutExtension("Spatial")
 arcpy.env.overwriteOutput = True
 arcpy.env.qualifiedFieldNames = False
+arcpy.CheckOutExtension("Spatial")
 
+#Input data
 rootdir = 'C:/Mathis/ICSL/stormwater/'
 datadir = os.path.join(rootdir, 'data')
 resdir  = os.path.join(rootdir,'results')
 LU_gdb = os.path.join(resdir, 'LU.gdb')
 arcpy.env.workspace = LU_gdb
-arcpy.CheckOutExtension("Spatial")
-arcpy.env.overwriteOutput = True
 
 NLCD = os.path.join(datadir, 'nlcd_2011_landcover_2011_edition_2014_10_10\\nlcd_2011_landcover_2011_edition_2014_10_10.img')
+NLCDimp = os.path.join(datadir, 'nlcd_2011_impervious_2011_edition_2014_10_10\\nlcd_2011_impervious_2011_edition_2014_10_10.img')
 WAroads = os.path.join(datadir, 'OSM_WA_20180601/gis_osm_roads_free_1.shp')
 ORroads = os.path.join(datadir, 'OSM_OR_20180927/gis_osm_roads_free_1.shp')
 CAroads = os.path.join(datadir, 'OSM_CA_20180927/gis_osm_roads_free_1.shp')
@@ -40,15 +46,13 @@ crs= arcpy.Describe(NLCD).SpatialReference
 #----------------------------------------------- Analysis --------------------------------------------------------------
 #Merge OSM roads along the West Coast
 arcpy.Merge_management([WAroads, ORroads, CAroads], WCroads)
-#Subset roads to only include
+#Subset roads to exclude pedestrian streets, tracks as mainly used for forestry and agricultural and often unpaved, bus_guideway, escape
 arcpy.MakeFeatureLayer_management(WCroads, 'WCroads_lyr')
-#Excludes pedestrian streets, tracks as mainly used for forestry and agricultural and often unpaved, bus_guideway, escape
 sel = "{} IN ('motorway','motorway_link','living_street','primary','primary_link','residential','secondary','secondary_link'," \
       "'tertiary','tertiary_link','trunk','trunk_link','service','unclassified','unknown', 'raceway','road')".format('"fclass"')
 arcpy.SelectLayerByAttribute_management('WCroads_lyr', 'NEW_SELECTION', sel)
 arcpy.CopyFeatures_management('WCroads_lyr', WCroads_sub)
-
-#Project
+#Project road layer
 arcpy.Project_management(WCroads_sub, WCroads_subproj, out_coor_system= crs)
 
 #Assume lanes of 12ft, the most common width standard
@@ -59,7 +63,6 @@ arcpy.Project_management(WCroads_sub, WCroads_subproj, out_coor_system= crs)
 arcpy.MakeFeatureLayer_management(WCroads_subproj, 'WCroads_lyr')
 arcpy.AddJoin_management('WCroads_lyr', 'fclass', bufwidthtab, 'fclass')
 arcpy.CopyFeatures_management('WCroads_lyr', WCroads_subproj+'_rwidth')
-
 arcpy.Buffer_analysis(WCroads_subproj+'_rwidth', WCroadbuff, 'bufwidth', dissolve_option='NONE')
 
 #Rasterize road buffers to 6 m resolution snapped to NLCD_reclass
@@ -76,13 +79,16 @@ arcpy.PolygonToRaster_conversion(WCroadbuff, 'PIX', WCroadras, cell_assignment= 
 roadrasag = arcpy.sa.Aggregate(WCroadras, 5, aggregation_type= 'SUM', extent_handling='EXPAND', ignore_nodata='DATA')
 roadrasag.save(WCroadrasag)
 
+#Reclass to road pixel when roads cover more than 50% of the impervious area of a developed pixel
 OutCon1 = Con(IsNull(Raster(WCroadrasag)), Raster(NLCD_reclass),
-              Con((Raster(NLCD)==21) & ((Float(Raster(WCroadrasag))/25.0)>0.15), 96,
-                  Con((Raster(NLCD)==22) & ((Float(Raster(WCroadrasag)/25.0))>0.20), 96,
-                      Con((Raster(NLCD)==23) & ((Float(Raster(WCroadrasag)/25.0))>0.25), 96,
-                        Con((Raster(NLCD)==24) & ((Float(Raster(WCroadrasag)/25.0))>0.40), 96, Raster(NLCD_reclass)
-                            )))))
+              Con(((Raster(NLCD)>=21) & (Raster(NLCD)<=24)) & ((100*Float(Raster(WCroadrasag))/(25.0*Raster(NLCDimp)))>0.50), 96,
+                  Raster(NLCD_reclass)))
 OutCon1.save("NLCD_reclass_final")
+
+# Con(IsNull("WestCoastroadsras_testag"), "NLCD_reclass",
+#     Con((("nlcd_2011_landcover_2011_edition_2014_10_10.img">=21) & ("nlcd_2011_landcover_2011_edition_2014_10_10.img"<=24)) &
+#         ((100*Float("WestCoastroadsras_testag")/(25.0*"nlcd_2011_impervious_2011_edition_2014_10_10.img"))>0.50),
+#         96, "NLCD_reclass"))
 
 
 #-------------------------------------------- EXTRA STUFF --------------------------------------------------------------
