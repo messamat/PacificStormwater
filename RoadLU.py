@@ -30,7 +30,8 @@ WCroads = os.path.join(LU_gdb, 'WestCoastroads')
 WCroads_sub = WCroads + '_sub'
 WCroads_subproj = WCroads + '_subproj'
 WCroadbuff = WCroads + '_buf'
-WCroadbuff_diss = WCroadbuff + '_diss'
+WCroadras = WCroads + 'ras'
+WCroadrasag = WCroads + 'ras_ag'
 NLCD_reclass_sub = os.path.join(LU_gdb, 'NLCD_reclass_sub')
 road_LUinters = 'road_LUurb_inters'
 road_LUdiss = road_LUinters + '_diss'
@@ -61,12 +62,41 @@ arcpy.CopyFeatures_management('WCroads_lyr', WCroads_subproj+'_rwidth')
 
 arcpy.Buffer_analysis(WCroads_subproj+'_rwidth', WCroadbuff, 'bufwidth', dissolve_option='NONE')
 
+#Rasterize road buffers to 6 m resolution snapped to NLCD_reclass
+arcpy.env.snapRaster = NLCD_reclass
+arcpy.AddField_management(WCroadbuff, 'PIX', 'SHORT')
+arcpy.CalculateField_management(WCroadbuff, 'PIX', 1, 'PYTHON')
+arcpy.PolygonToRaster_conversion(WCroadbuff, 'PIX', WCroadras, cell_assignment= 'MAXIMUM_AREA', cellsize = 6)
+
+#Convert developed land use to road pixels when road pixel covers more than half of developed area
+#21	Developed, Open Space - < 20% total cover
+#22	Developed, Low Intensity - 20-49% total cover
+#23	Developed, Medium Intensity - 50-79% total cover
+#24 Developed, high Intensity - 80-100% total cover
+roadrasag = arcpy.sa.Aggregate(WCroadras, 5, aggregation_type= 'SUM', extent_handling='EXPAND', ignore_nodata='DATA')
+roadrasag.save(WCroadrasag)
+
+OutCon1 = Con(IsNull(Raster(WCroadrasag)), NLCD_reclass,
+              Con((Raster(NLCD)==21) & ((Raster(WCroadrasag)/25)>0.15), 96,
+                  Con((Raster(NLCD)==22) & ((Raster(WCroadrasag)/25)>0.20), 96,
+                      Con((Raster(NLCD)==23) & ((Raster(WCroadrasag)/25)>0.25), 96,
+                        Con((Raster(NLCD)==23) & ((Raster(WCroadrasag)/25)>0.40), 96, NLCD_reclass
+                            )))))
+OutCon1.save("NLCD_reclass_final")
+
+# Out = Con(IsNull("WestCoastroadsras"), "NLCD_reclass_final",
+#           Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==21) & ((Float("WestCoastroadsras")/25)>=0.20), 96,
+#               Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==22) & ((Float("WestCoastroadsras")/25)>=0.25), 96,
+#                   Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==23) & ((Float("WestCoastroadsras")/25)>=0.40), 96,
+#                       Con(("nlcd_2011_landcover_2011_edition_2014_10_10.img"==23) & ((Float("WestCoastroadsras")/25)>=0.50), 96,
+#                       "NLCD_reclass_final")))))
+
 #Subset raster to just urban pixels
 arcpy.env.extent = WCroadbuff
 urblu = Con(Raster(NLCD_reclass)>95, 1)
 urblu.save(NLCD_reclass_sub)
 
-#Create fishnet to intersect with roads - too bulky, leads to 280 million polygons just for Washington State
+#Create fishnet to intersect with roads - too bulky, leads to 280 million polygons just for Washington State and took 36h to generate
 # orig = str(arcpy.GetRasterProperties_management(NLCD_reclass_sub, 'LEFT').getOutput(0)) + ' ' + \
 #        str(arcpy.GetRasterProperties_management(NLCD_reclass_sub, 'BOTTOM').getOutput(0))
 # Yaxis = str(arcpy.GetRasterProperties_management(NLCD_reclass_sub, 'LEFT').getOutput(0)) + ' ' + \
@@ -80,10 +110,10 @@ urblu.save(NLCD_reclass_sub)
 # arcpy.AlterField_management('WCfishnet', 'POLY_AREA', 'CELLAREA', 'CELLAREA')
 
 #Intersect fishnet and roads
-arcpy.Intersect_analysis([WCroadbuff_diss, 'WCfishnet'], road_LUinters)
-arcpy.Dissolve_management(road_LUinters, road_LUdiss, dissolve_field=) #Use fishnet identifier
-arcpy.AddGeometryAttributes_management(road_LUdiss, 'AREA', Area_Unit='SQUARE_METERS')
-arcpy.AddField_management(road_LUdiss, 'ROADPER', 'FLOAT')
-arcpy.CalculateField_management(road_LUdiss, 'ROADPER', '!POLY_AREA!/!CELL_AREA!', expression_type='PYTHON')
+# arcpy.Intersect_analysis([WCroadbuff_diss, 'WCfishnet'], road_LUinters)
+# arcpy.Dissolve_management(road_LUinters, road_LUdiss, dissolve_field=) #Use fishnet identifier
+# arcpy.AddGeometryAttributes_management(road_LUdiss, 'AREA', Area_Unit='SQUARE_METERS')
+# arcpy.AddField_management(road_LUdiss, 'ROADPER', 'FLOAT')
+# arcpy.CalculateField_management(road_LUdiss, 'ROADPER', '!POLY_AREA!/!CELL_AREA!', expression_type='PYTHON')
 
 #Then compete 'ROADPER' to NLCD land use, if road > 0.5, then make it road LU
